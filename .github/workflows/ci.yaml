@@ -1,0 +1,44 @@
+name: PR Validation
+
+on:
+  push:
+    branches: [main, hotfix]
+  pull_request:
+    branches: [main, hotfix]
+    types: [opened, synchronize, reopened]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  ACTIONS_STEP_DEBUG: true
+
+jobs:
+  validate-format:
+    name: Validate Format
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+      - name: Install Poetry
+        uses: abatilo/actions-poetry@v4
+      - name: Setup VirtualEnv
+        run: |
+          poetry config virtualenvs.create true --local
+          poetry config virtualenvs.in-project true --local
+      - uses: actions/cache@v3
+        # Define a cache for the virtual environment based on the dependencies lock file
+        name: Define Cache
+        with:
+          path: ./.venv
+          key: venv-${{ hashFiles('poetry.lock') }}
+      - name: Install Project Dependencies
+        run: poetry install
+      - name: Check Format
+        run: poetry run make format-check
