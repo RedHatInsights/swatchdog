@@ -169,7 +169,7 @@ def convert_date(ctx, param, value):
 @prometheus.command()
 @click.option(
     "--source",
-    default="swatch-metrics/src/main/resources/application.yaml",
+    default="swatch-metrics/src/main/resources/application.properties",
     callback=validate_path,
     type=str,
     show_default=True,
@@ -194,13 +194,10 @@ def convert_date(ctx, param, value):
 def promql(
     source: str, product_config_dir: str, url: str, product: str, metric: str, org: str
 ):
-    with open(source) as config_file:
-        config = yaml.safe_load(config_file)
-        metric_section = config["rhsm-subscriptions"]["metering"]["prometheus"][
-            "metric"
-        ]
-        query_templates = metric_section["queryTemplates"]
-        account_query_templates = metric_section["accountQueryTemplates"]
+    config = load_config_file(source)
+    metric_section = config["rhsm-subscriptions"]["metering"]["prometheus"]["metric"]
+    query_templates = metric_section["queryTemplates"]
+    account_query_templates = metric_section["accountQueryTemplates"]
 
     templates = {"account_query": account_query_templates, "query": query_templates}
 
@@ -306,3 +303,39 @@ def mock_data(
             f.write(output)
     else:
         console.print(output, highlight=False)
+
+
+def load_config_file(source_path):
+    """
+    Load a source configuration file regardless whether is a properties or a YAML file.
+    """
+    file_extension = os.path.splitext(source_path)[1].lower()
+
+    if file_extension == ".yaml":
+        with open(source_path, "r") as config_file:
+            config = yaml.safe_load(config_file)
+    elif file_extension == ".properties":
+        config = {}
+        with open(source_path, "r") as config_file:
+            for line in config_file:
+                line = line.strip()
+                if line and not line.startswith("#"):
+                    key, value = line.split("=", 1)
+                    keys = key.strip().split(".")
+                    set_nested_value(config, keys, value.strip())
+    else:
+        raise ValueError(f"Unsupported format: {file_extension}")
+
+    return config
+
+
+def set_nested_value(d, keys, value):
+    for i, key in enumerate(keys):
+        if i == len(keys) - 1:
+            d[key] = value
+        else:
+            if key not in d:
+                d[key] = {}
+            elif not isinstance(d[key], dict):
+                d[key] = {}
+            d = d[key]
